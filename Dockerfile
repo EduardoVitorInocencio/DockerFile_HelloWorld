@@ -1,24 +1,21 @@
-#Use the official Python image as a base image
+# Use a imagem oficial do Python como base
 FROM python:3.9-alpine
 
-# Set the working directory in the container
+# Define o diretório de trabalho
 WORKDIR /code
 
-# Set the environment variable for Flask app
-ENV FLASK_APP=app.py 
+# Configura as variáveis de ambiente corretamente
+ENV FLASK_APP=app.py
+ENV FLASK_RUN_HOST=0.0.0.0
 
-# Allow external access
-ENV FLASK_RUN_HOST=0.0.0.0 
+# Copia os arquivos para o contêiner
+COPY . .
 
-# Copy the current directory contents into the container at /code
-COPY . . 
+# Instala as dependências
+RUN pip install -r requirements.txt
 
-# Install dependencies
-RUN pip install -r requirements.txt 
-
-#Expose port 5000 for Flask
+# Expõe a porta 5000
 EXPOSE 5000
 
-# Run the Flask app
+# Executa o Flask na porta correta
 CMD ["flask", "run", "--host=0.0.0.0", "--port=5000"]
-

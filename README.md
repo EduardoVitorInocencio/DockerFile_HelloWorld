@@ -1,167 +1,117 @@
-# Criando e Executando um Aplicativo Flask com Docker
+# Capítulo 02: Introdução ao Docker e Flask
 
-Neste exercício, vamos entender passo a passo a estrutura de um aplicativo Flask simples e como configurá-lo para rodar em um container Docker.
-
----
-
-## 1. Estrutura do Projeto
-Nosso projeto contém os seguintes arquivos:
-
-```
-DockerFile_HelloWorld/
-├── app.py
-├── Dockerfile
-├── requirements.txt
-```
-
-Cada um desses arquivos tem uma função específica que vamos detalhar a seguir.
+## Visão Geral
+Este capítulo explica como criar e executar um aplicativo Flask dentro de um contêiner Docker. O código utiliza Flask para criar uma API simples e usa Docker para facilitar a implantação.
 
 ---
 
-## 2. Aplicativo Flask (app.py)
-O arquivo **app.py** é um aplicativo Flask simples que exibe "Hello World!" ao ser acessado.
+## Código Flask (Versão 2)
 
-### **Código do app.py:**
+### Explicação
+A segunda versão do código Flask inclui integração com Redis para contar quantas vezes a página foi acessada.
 
+#### Importação de Módulos
 ```python
-# Importação das bibliotecas necessárias
 from flask import Flask
 import os
-
-# Inicialização do aplicativo Flask
-app = Flask(__name__)
-
-# Rota principal que retorna "Hello World!"
-@app.route('/', methods=['GET'])
-def home():
-    return "Hello World!"
-
-# Configura o servidor para rodar na porta 5000
-if __name__ == '__main__':
-    app.run(debug=True, host="0.0.0.0", port=5000)
+import time
+import redis
 ```
+Aqui, importamos o Flask para criar a aplicação web, os módulos `os` e `time` para operações do sistema e manipulação de tempo, e `redis` para conexão com o Redis.
 
-### **Explicação do código:**
-1. **Importação das bibliotecas**:
-   - `Flask`: Framework para criação de aplicativos web em Python.
-   - `os`: Biblioteca do sistema operacional (embora não seja usada aqui, pode ser útil em projetos maiores).
+#### Inicialização do Aplicativo
+```python
+app = Flask(__name__)
+cache = redis.Redis(host='redis', port=6379)
+```
+Criamos a aplicação Flask e conectamos ao Redis rodando na rede Docker no serviço `redis`, porta 6379.
 
-2. **Inicialização do Flask**:
-   - `app = Flask(__name__)` cria uma instância do Flask para gerenciar o servidor web.
+#### Função de Contagem de Acessos
+```python
+def get_hit_count():
+    retries = 5
+    while True:
+        try:
+            cache.reset_retry_count()
+            return cache.incr('hits')
+        except redis.exceptions.ConnectionError as exc:
+            if retries == 0:
+                raise exc
+            retries -= 1
+            time.sleep(0.5)
+```
+Esta função tenta conectar ao Redis e incrementar um contador chamado `hits`. Se houver erro de conexão, ele tenta novamente até 5 vezes, aguardando 0,5s entre as tentativas.
 
-3. **Definição de rota**:
-   - `@app.route('/')`: Define o caminho `/`, que será acessado via requisição HTTP GET.
-   - `def home()`: Função que retorna "Hello World!" quando a rota é acessada.
-
-4. **Execução do aplicativo**:
-   - `app.run(debug=True, host="0.0.0.0", port=5000)`:
-     - `debug=True`: Ativa o modo de depuração.
-     - `host="0.0.0.0"`: Permite conexões externas ao container.
-     - `port=5000`: Define a porta do servidor.
+#### Rota Principal
+```python
+@app.route('/', methods=['GET'])
+def hello():
+    count = get_hit_count()
+    return "Hello! I've been seen {} times.\n".format(count)
+```
+Aqui definimos uma rota que retorna uma mensagem contendo o número de vezes que a página foi acessada.
 
 ---
 
-## 3. Criando o Dockerfile
-O **Dockerfile** define a imagem Docker para o nosso aplicativo Flask.
+## Docker Compose
 
-### **Código do Dockerfile:**
+O `docker-compose.yml` define um ambiente com três serviços: a aplicação web, Redis e MySQL.
+
+```yaml
+version: "3.8"
+services:
+  web:
+    image: web-app
+    build: .
+    ports:
+      - "8000:5000"
+  redis:
+    image: redis
+  mysql:
+    image: mysql
+```
+- O serviço `web` constrói a aplicação e expõe a porta 8000 para acesso.
+- O serviço `redis` usa a imagem oficial do Redis.
+- O serviço `mysql` usa a imagem oficial do MySQL.
+
+---
+
+## Dockerfile
+
+O `Dockerfile` define a imagem do contêiner Flask.
 
 ```dockerfile
-# Usa a imagem base do Python 3.8 com Alpine Linux
-FROM python:3.8-alpine
+# Use Python 3.9 como base
+FROM python:3.9-alpine
 
-# Copia os arquivos do diretório atual para o container
-COPY . /app
+# Define o diretório de trabalho
+WORKDIR /code
 
-# Define o diretório de trabalho dentro do container
-WORKDIR /app
+# Define variáveis de ambiente
+ENV FLAKS_APP=app.py 
+ENV FLAKS_RUN_HOST=0.0.0.0 
 
-# Instala as dependências listadas em requirements.txt
-RUN pip install -r requirements.txt
+# Copia o código para o contêiner
+COPY . . 
 
-# Expõe a porta 5000 para conexões externas
+# Instala as dependências
+RUN pip install -r requirements.txt 
+
+# Expõe a porta 5000
 EXPOSE 5000
 
-# Comando para iniciar o aplicativo Flask
-CMD python app.py
+# Comando para rodar o Flask
+CMD ["flask","run"] 
 ```
-
-### **Explicação do Dockerfile:**
-1. `FROM python:3.8-alpine`:
-   - Usa uma imagem leve do Python 3.8 baseada no Alpine Linux.
-2. `COPY . /app`:
-   - Copia todos os arquivos do diretório local para o container.
-3. `WORKDIR /app`:
-   - Define `/app` como o diretório de trabalho dentro do container.
-4. `RUN pip install -r requirements.txt`:
-   - Instala as dependências especificadas em `requirements.txt`.
-5. `EXPOSE 5000`:
-   - Declara que o container usará a porta **5000**.
-6. `CMD python app.py`:
-   - Define o comando padrão para rodar o aplicativo Flask.
+- Define Python 3.9 como base.
+- Define diretório de trabalho e variáveis de ambiente.
+- Copia os arquivos da aplicação.
+- Instala dependências.
+- Expõe a porta 5000.
+- Executa o Flask ao iniciar o contêiner.
 
 ---
 
-## 4. Construindo e Rodando o Container
-Agora vamos construir a imagem Docker e rodar o container.
-
-### **4.1 Construir a imagem**
-Execute o seguinte comando no terminal dentro do diretório do projeto:
-
-```sh
-docker build -t welcome-app .
-```
-
-- `-t welcome-app`: Define o nome da imagem como `welcome-app`.
-- `.`: Indica que o Dockerfile está no diretório atual.
-
-### **4.2 Rodar o container**
-
-```sh
-docker run -p 5000:5000 welcome-app
-```
-
-- `-p 5000:5000`: Mapeia a porta do container para a máquina host.
-- `welcome-app`: Nome da imagem.
-
-Agora, você pode acessar `http://localhost:5000/` no navegador e ver a mensagem **"Hello World!"**.
-
----
-
-## 5. Possíveis Erros e Soluções
-
-### **Erro: Porta 5000 já está em uso**
-#### Mensagem de erro:
-```
-docker: Error response from daemon: driver failed programming external connectivity on endpoint ... Bind for 0.0.0.0:5000 failed: port is already allocated.
-```
-#### Solução:
-1. Verifique qual processo está usando a porta 5000:
-   ```sh
-   netstat -ano | findstr :5000
-   ```
-2. Mate o processo:
-   ```sh
-   taskkill /PID <PID> /F
-   ```
-3. Ou rode o container em outra porta:
-   ```sh
-   docker run -p 5001:5000 welcome-app
-   ```
-
-### **Erro: Dependência incompatível no requirements.txt**
-#### Mensagem de erro:
-```
-ERROR: Could not find a version that satisfies the requirement blinker==1.9.0
-```
-#### Solução:
-1. Use uma versão do `blinker` compatível com o Python 3.8:
-   ```sh
-   blinker==1.8.2
-   ```
-2. Ou altere o Dockerfile para usar Python 3.9:
-   ```dockerfile
-   FROM python:3.9-alpine
-   ```
-
+## Conclusão
+Agora temos um ambiente Flask com Redis e MySQL rodando em contêineres. O Redis mantém um contador de acessos, demonstrando como armazenar dados temporários na memória. No próximo capítulo, abordaremos testes e deploy desse ambiente.
 

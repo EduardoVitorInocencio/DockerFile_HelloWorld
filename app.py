@@ -12,7 +12,7 @@ def get_hit_count():
     retries = 5
     while True:
         try:
-            cache.reset_retry_count()
+            # cache.reset_retry_count()
             return cache.incr('hits')
         except redis.exceptions.ConnectionError as exc:
             if retries == 0:
@@ -23,7 +23,7 @@ def get_hit_count():
 @app.route('/', methods=['GET'])
 def hello():
     count = get_hit_count()
-    return "Hello! I've been seen {} times.\n".format(count)
+    return "Hello Dockers! I've been seen {} times.\n".format(count)
 
 # if __name__ == '__main__':
 #     app.run(debug=True, host="0.0.0.0", port=5000)
