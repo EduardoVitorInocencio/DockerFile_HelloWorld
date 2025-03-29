@@ -5,10 +5,10 @@ FROM python:3.9-alpine
 WORKDIR /code
 
 # Set the environment variable for Flask app
-ENV FLAKS_APP=app.py 
+ENV FLASK_APP=app.py 
 
 # Allow external access
-ENV FLAKS_RUN_HOST=0.0.0.0 
+ENV FLASK_RUN_HOST=0.0.0.0 
 
 # Copy the current directory contents into the container at /code
 COPY . . 
@@ -20,5 +20,5 @@ RUN pip install -r requirements.txt
 EXPOSE 5000
 
 # Run the Flask app
-CMD ["flask","run"] 
+CMD ["flask", "run", "--host=0.0.0.0", "--port=5000"]
 
